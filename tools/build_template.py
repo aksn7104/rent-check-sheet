@@ -95,8 +95,21 @@ def title(ws, text, note=None, note_row=2):
         ws.cell(row=note_row, column=1, value=note).font = f_note
 
 def dv_list(ws, formula, cells, allow_blank=True):
+    # xlsx の仕様では、プルダウンの参照範囲の先頭に「=」を付けない（付けると Google スプレッドシートが読み込まない）
+    formula = formula[1:] if formula.startswith('=') else formula
     dv = DataValidation(type='list', formula1=formula, allow_blank=allow_blank)
     ws.add_data_validation(dv); dv.add(cells)
+
+def list_src(ws, src_sheet, src_col, r0, r1, label):
+    # 同じシートの右端に、元の一覧を写した非表示の列を作り、プルダウンはそこから選ぶ
+    from openpyxl.utils import get_column_letter
+    col = get_column_letter(ws.max_column + 2)
+    ws[f'{col}4'].value = label; ws[f'{col}4'].font = f_note
+    for i in range(r1 - r0 + 1):
+        ref = f"'{src_sheet}'!${src_col}${r0 + i}"
+        ws[f'{col}{5 + i}'].value = f'=IF({ref}="","",{ref})'
+    ws.column_dimensions[col].hidden = True
+    return f'${col}$5:${col}${5 + r1 - r0}'
 
 def cf(ws, cells, formula, fill):
     ws.conditional_formatting.add(cells, FormulaRule(formula=[formula], fill=fill))
@@ -238,7 +251,7 @@ dv = DataValidation(type='custom', formula1=f'COUNTIF($A${LED0}:$A${LED1},A{LED0
                     errorTitle='号室が重複しています', error='同じ号室は1行だけにしてください。退去済の行を上書きして使います。', showErrorMessage=True)
 ws.add_data_validation(dv); dv.add(f'A{LED0}:A{LED1}')
 PRO_NAMES = rng('pro', 'A', PRO0, PRO1)
-dv_list(ws, '=' + PRO_NAMES, f'R{LED0}:R{LED1}')
+dv_list(ws, list_src(ws, SH['pro'], 'A', PRO0, PRO1, '物件一覧（自動）'), f'R{LED0}:R{LED1}')
 ROOMS = rng('led', 'A', LED0, LED1)
 from openpyxl.workbook.defined_name import DefinedName
 _dn = DefinedName('号室一覧', attr_text="'%s'!$A$%d:$A$%d" % (SH['led'], LED0, LED1))
@@ -248,15 +261,7 @@ except TypeError:
     wb.defined_names.append(_dn)
 ROOM_LIST = '=号室一覧'
 def room_src(ws):
-    # 同じシートの右端に、台帳の号室を写した列（非表示）を作り、プルダウンはそこから選ぶ。
-    # Excel 形式のまま Google スプレッドシートで開くと、他のシートを参照するプルダウンが動かないため。
-    from openpyxl.utils import get_column_letter
-    col = get_column_letter(ws.max_column + 2)
-    ws[f'{col}4'].value = '号室一覧（自動）'; ws[f'{col}4'].font = f_note
-    for i in range(LED1 - LED0 + 1):
-        ws[f'{col}{5 + i}'].value = f"=IF('{SH['led']}'!$A${LED0 + i}=\"\",\"\",'{SH['led']}'!$A${LED0 + i})"
-    ws.column_dimensions[col].hidden = True
-    return f'=${col}$5:${col}${5 + LED1 - LED0}'
+    return list_src(ws, SH['led'], 'A', LED0, LED1, '号室一覧（自動）')
 
 # ============================================================ 物件台帳
 ws = wb.create_sheet(SH['pro'])
@@ -571,7 +576,7 @@ for i in range(TAX1 - TAX0 + 1):
     auto_cell(ws, f'I{r}', f'=IF($H{r}="未納",$E{r}-{TODAY},"")', fmt='0')
     auto_cell(ws, f'J{r}', f'=IF($H{r}="","",IF($H{r}="納付済","納付済",IF($I{r}<0,"納期限超過",IF($I{r}<={S["tr"]},"赤",IF($I{r}<={S["ty"]},"黄","")))))', align=CENTER)
 dv_list(ws, '"固定資産税,都市計画税,その他"', f'B{TAX0}:B{TAX1}')
-dv_list(ws, '=' + PRO_NAMES, f'C{TAX0}:C{TAX1}')
+dv_list(ws, list_src(ws, SH['pro'], 'A', PRO0, PRO1, '物件一覧（自動）'), f'C{TAX0}:C{TAX1}')
 cf(ws, f'A{TAX0}:J{TAX1}', f'OR($J{TAX0}="赤",$J{TAX0}="納期限超過")', fill_red)
 cf(ws, f'A{TAX0}:J{TAX1}', f'$J{TAX0}="黄"', fill_yel)
 cf(ws, f'J{TAX0}:J{TAX1}', f'$J{TAX0}="納付済"', fill_grn)
