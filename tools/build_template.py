@@ -220,7 +220,7 @@ ledger = [
  ('104', '遠藤 美咲', 'エンドウ ミサキ', '090-0000-0004', 'endo@example.com', 65000, 5000, '月末', D(2025,7,1), D(2027,6,30), 'サンプル保証会社', '支払委託型', D(2027,6,30), D(2027,6,30), '入居中', None, None, '本館サンプル'),
  ('105', '岡田 翔', 'オカダ ショウ', '090-0000-0005', 'okada@example.com', 72000, 3000, 25, D(2025,2,1), D(2027,1,31), 'サンプル保証会社', '一般保証型', D(2027,1,31), D(2027,1,31), '入居中', None, None, '本館サンプル'),
  ('106', '加藤 彩', 'カトウ アヤ', '090-0000-0006', 'kato@example.com', 60000, 0, 27, D(2023,5,1), D(2025,4,30), '', '保証なし', None, None, '退去済', None, None, '本館サンプル'),
- ('107', '森 優', 'モリ ユウ', '090-0000-0007', 'mori@example.com', 65000, 0, 27, D(2024,3,1), D(2026,10,31), '', '保証なし', None, None, '退去済', None, None),
+ ('107', '森 優', 'モリ ユウ', '090-0000-0007', 'mori@example.com', 65000, 0, 27, D(2024,3,1), D(2026,10,31), '', '保証なし', None, None, '退去済', None, None, '本館サンプル'),
 ]
 for i in range(LED1 - LED0 + 1):
     r = LED0 + i
@@ -240,7 +240,13 @@ ws.add_data_validation(dv); dv.add(f'A{LED0}:A{LED1}')
 PRO_NAMES = rng('pro', 'A', PRO0, PRO1)
 dv_list(ws, '=' + PRO_NAMES, f'R{LED0}:R{LED1}')
 ROOMS = rng('led', 'A', LED0, LED1)
-ROOM_LIST = "=" + ROOMS
+from openpyxl.workbook.defined_name import DefinedName
+_dn = DefinedName('号室一覧', attr_text="'%s'!$A$%d:$A$%d" % (SH['led'], LED0, LED1))
+try:
+    wb.defined_names['号室一覧'] = _dn
+except TypeError:
+    wb.defined_names.append(_dn)
+ROOM_LIST = '=号室一覧'
 
 # ============================================================ 物件台帳
 ws = wb.create_sheet(SH['pro'])
