@@ -247,6 +247,16 @@ try:
 except TypeError:
     wb.defined_names.append(_dn)
 ROOM_LIST = '=号室一覧'
+def room_src(ws):
+    # 同じシートの右端に、台帳の号室を写した列（非表示）を作り、プルダウンはそこから選ぶ。
+    # Excel 形式のまま Google スプレッドシートで開くと、他のシートを参照するプルダウンが動かないため。
+    from openpyxl.utils import get_column_letter
+    col = get_column_letter(ws.max_column + 2)
+    ws[f'{col}4'].value = '号室一覧（自動）'; ws[f'{col}4'].font = f_note
+    for i in range(LED1 - LED0 + 1):
+        ws[f'{col}{5 + i}'].value = f"=IF('{SH['led']}'!$A${LED0 + i}=\"\",\"\",'{SH['led']}'!$A${LED0 + i})"
+    ws.column_dimensions[col].hidden = True
+    return f'=${col}$5:${col}${5 + LED1 - LED0}'
 
 # ============================================================ 物件台帳
 ws = wb.create_sheet(SH['pro'])
@@ -334,7 +344,7 @@ for i in range(PAY1 - PAY0 + 1):
     auto_cell(ws, f'K{r}', f'=IF($J{r}="","",$E{r}-$J{r})', fmt=YEN)
     auto_cell(ws, f'L{r}', f'=IF($B{r}="","",IFERROR(MATCH($B{r},{ROOMS},0),""))', fmt='0')
 ws.freeze_panes = 'A5'
-dv_list(ws, ROOM_LIST, f'B{PAY0}:B{PAY1}')
+dv_list(ws, room_src(ws), f'B{PAY0}:B{PAY1}')
 dv_list(ws, '"入居者,保証会社"', f'F{PAY0}:F{PAY1}')
 dv_list(ws, '"1,2,3,4,5,6,7,8,9,10,11,12"', f'D{PAY0}:D{PAY1}')
 
@@ -351,7 +361,7 @@ for i in range(ADJ1 - ADJ0 + 1):
         col = 'ABCDE'[j]
         c = input_cell(ws, f'{col}{r}', v, fmt=(YEN if col == 'D' else None))
         if col == 'C': c.number_format = '@'
-dv_list(ws, ROOM_LIST, f'C{ADJ0}:C{ADJ1}')
+dv_list(ws, room_src(ws), f'C{ADJ0}:C{ADJ1}')
 dv_list(ws, '"1,2,3,4,5,6,7,8,9,10,11,12"', f'B{ADJ0}:B{ADJ1}')
 ws.freeze_panes = 'A5'
 
@@ -467,7 +477,7 @@ for i in range(DEP1 - DEP0 + 1):
     input_cell(ws, f'L{r}', v[7])
     auto_cell(ws, f'M{r}', f'=IF(OR($D{r}="",$F{r}=""),"",$F{r}+{S["dt"]})', fmt=DATE)
     auto_cell(ws, f'N{r}', f'=IF($D{r}="","",IF($L{r}="精算済","精算済",IF($F{r}="","預り中",IF({TODAY}>$M{r},"精算遅れ","精算期間内"))))', align=CENTER)
-dv_list(ws, ROOM_LIST, f'A{DEP0}:A{DEP1}')
+dv_list(ws, room_src(ws), f'A{DEP0}:A{DEP1}')
 dv_list(ws, '"敷金,保証金,その他預り金"', f'C{DEP0}:C{DEP1}')
 dv_list(ws, '"預り中,精算済"', f'L{DEP0}:L{DEP1}')
 cf(ws, f'A{DEP0}:N{DEP1}', f'$N{DEP0}="精算遅れ"', fill_red)
@@ -497,7 +507,7 @@ for i in range(VAC1 - VAC0 + 1):
     auto_cell(ws, f'K{r}', f'=IF($J{r}="","",IF($J{r}>={S["vr"]},"赤",IF($J{r}>={S["vy"]},"黄","")))', align=CENTER)
     auto_cell(ws, f'L{r}', f'=IF(OR($J{r}="",$E{r}=""),"",ROUND($E{r}*$J{r}/30,0))', fmt=YEN)
 dv_list(ws, '"空室,募集中,申込あり"', f'B{VAC0}:B{VAC1}')
-dv_list(ws, ROOM_LIST, f'A{VAC0}:A{VAC1}')
+dv_list(ws, room_src(ws), f'A{VAC0}:A{VAC1}')
 cf(ws, f'A{VAC0}:L{VAC1}', f'$K{VAC0}="赤"', fill_red)
 cf(ws, f'A{VAC0}:L{VAC1}', f'$K{VAC0}="黄"', fill_yel)
 ws.freeze_panes = 'B5'
@@ -529,7 +539,7 @@ for i in range(REP1 - REP0 + 1):
     auto_cell(ws, f'L{r}', (f'=IF($J{r}="","",IF(COUNTIFS({RB},$B{r},{RD},$D{r},{RA},">"&$A{r})>0,"更新済",'
                             f'IF($K{r}<0,"目安超過",IF($K{r}<={S["er"]},"赤",IF($K{r}<={S["ey"]},"黄","")))))'), align=CENTER)
 dv_list(ws, '"修繕,交換,点検,その他"', f'C{REP0}:C{REP1}')
-_dv = DataValidation(type='list', formula1=ROOM_LIST, allow_blank=True, errorStyle='warning', errorTitle='台帳にない号室です', error='共用部などの場合は、このまま入力できます。', showErrorMessage=True)
+_dv = DataValidation(type='list', formula1=room_src(ws), allow_blank=True, errorStyle='warning', errorTitle='台帳にない号室です', error='共用部などの場合は、このまま入力できます。', showErrorMessage=True)
 ws.add_data_validation(_dv); _dv.add(f'B{REP0}:B{REP1}')
 dv_list(ws, '"含める,含めない"', f'H{REP0}:H{REP1}')
 cf(ws, f'A{REP0}:L{REP1}', f'OR($L{REP0}="赤",$L{REP0}="目安超過")', fill_red)
@@ -589,7 +599,7 @@ for i in range(REV1 - REV0 + 1):
     auto_cell(ws, f'H{r}', f'=IF($G{r}="","",$G{r}/$C{r})', fmt=PCT)
     auto_cell(ws, f'I{r}', f'=IF($G{r}="","",$G{r}*12)', fmt=YEN)
     auto_cell(ws, f'J{r}', f'=IF($G{r}="","",IF($G{r}>0,$I{r}*(1-{S["churn"]})-{S["churn"]}*$C{r}*{S["vdays"]}/30,$I{r}))', fmt=YEN)
-dv_list(ws, ROOM_LIST, f'A{REV0}:A{REV1}')
+dv_list(ws, room_src(ws), f'A{REV0}:A{REV1}')
 ws.freeze_panes = 'A5'
 
 # ============================================================ 年間収支
